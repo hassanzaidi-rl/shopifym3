@@ -3,8 +3,8 @@ import time
 
 # Shopify API credentials (set as environment variables in production)
 SHOPIFY_API_KEY = "bf520678d939baaf977cf4fbc5a00ba1"
-SHOPIFY_PASSWORD = "8b63bb8951839d6d91b3038b82a80c1f"
-SHOPIFY_STORE = "nerdused.myshopify.com"
+SHOPIFY_PASSWORD = "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"
+SHOPIFY_STORE = "nerdused.myshopify.com"  # e.g. "mybrand.myshopify.com"
 
 # Optional: Keep track of already processed orders (in memory)
 delivered_orders = set()
