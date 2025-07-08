@@ -36,6 +36,19 @@ def check_and_deliver(order_id):
         print("Order not found.")
         return
 
+    tags = order.get("tags", "")
+    print(f"Checking order {order_id}, tags: {tags}")  # <--- LOG EVERY ORDER AND TAGS!
+    if "fraud-high" in tags.lower() or "fraud-medium" in tags.lower():
+        print(f"Order {order_id} flagged as risky ({tags}). Delivery is delayed for manual review.")
+        return
+    elif order["id"] in delivered_orders:
+        print(f"Order {order_id} already delivered. Skipping.")
+        return
+    else:
+        deliver_digital_product(order)
+        delivered_orders.add(order["id"])
+
+
     tags = order.get("tags", "").lower()
     if "fraud-high" in tags or "fraud-medium" in tags:
         print(f"Order {order_id} flagged as risky ({tags}). Delivery is delayed for manual review.")
