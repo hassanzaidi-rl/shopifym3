@@ -27,6 +27,13 @@ EXPLANATION_LABELS = {
     "none": "No Specific Risk Reason"
 }
 
+@app.route('/shopify_webhook', methods=['POST'])
+def shopify_webhook():
+    order_data = request.get_json()
+    # For debugging, just log it for now:
+    print("Received order:", order_data)
+    return {"status": "received"}, 200
+
 @app.route('/')
 def home():
     return "✅ Advanced Fraud Detection API is running."
