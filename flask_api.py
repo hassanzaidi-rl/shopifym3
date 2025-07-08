@@ -30,9 +30,72 @@ EXPLANATION_LABELS = {
 @app.route('/shopify_webhook', methods=['POST'])
 def shopify_webhook():
     order_data = request.get_json()
-    # For debugging, just log it for now:
-    print("Received order:", order_data)
-    return {"status": "received"}, 200
+
+    # --- Feature extraction from order_data ---
+    features_dict = {
+        "total": float(order_data.get("total_price", 0)),
+        "order_value_mean": float(order_data.get("total_price", 0)),  # Placeholder for demo
+        "order_value_std": 0,  # Placeholder
+        "order_value_prev": 0,  # Placeholder
+        "order_value_jump": 0,  # Placeholder
+        "days_since_last_order": 0,  # Placeholder
+        "orders_last_7d": 0,  # Placeholder
+        "orders_last_30d": 0,  # Placeholder
+        "refund_rate": 0,  # Placeholder
+        "cancel_rate": 0,  # Placeholder
+        "chargeback_rate": 0,  # Placeholder
+        "unique_shipping_address": 1,  # Placeholder
+        "account_age_days": 0,  # Placeholder
+        "payment_method_is_risky": 0,  # Could improve: 1 if "bitcoin" or "crypto" in payment_gateway_names
+        "num_payment_methods": 1,  # Placeholder
+        "order_id": order_data.get("id"),
+        "email": order_data.get("email")
+    }
+
+    # --- Run prediction ---
+    input_df = pd.DataFrame([features_dict])[features]
+    prediction = model.predict(input_df)[0]
+    risk_label = label_encoder.inverse_transform([prediction])[0]
+
+    # --- Explanation logic ---
+    explanation = []
+    if input_df['orders_last_7d'].iloc[0] > 2:
+        explanation.append('repeat_orders_7d')
+    if input_df['refund_rate'].iloc[0] > 0.2:
+        explanation.append('refund_history')
+    if input_df['payment_method_is_risky'].iloc[0] == 1:
+        explanation.append('risky_payment_method')
+    if input_df['chargeback_rate'].iloc[0] > 0.05:
+        explanation.append('chargeback_history')
+    if input_df['order_value_jump'].iloc[0] > input_df['order_value_std'].iloc[0]:
+        explanation.append('order_value_jump')
+    if not explanation:
+        explanation.append('none')
+    explanation_str = ', '.join([EXPLANATION_LABELS.get(code, code) for code in explanation])
+
+    # --- Tag and annotate the order in Shopify ---
+    order_id = features_dict["order_id"]
+    shopify_status_code, shopify_response = None, None
+    if order_id:
+        shopify_status_code, shopify_response = tag_order_in_shopify(order_id, risk_label, explanation_str)
+
+    # --- Send confirmation email for medium/high risk ---
+    customer_email = features_dict["email"]
+    email_sent = None
+    if risk_label.lower() in ["medium", "high"] and customer_email:
+        email_sent = send_confirmation_email(customer_email, order_id, risk_label, explanation_str)
+
+    # --- Optional: Delayed delivery flag ---
+    delayed_delivery = (risk_label.lower() in ["medium", "high"])
+
+    return jsonify({
+        "fraud_risk": risk_label,
+        "explanation": explanation_str,
+        "shopify_status_code": shopify_status_code,
+        "shopify_response": shopify_response,
+        "email_sent": email_sent,
+        "delayed_delivery": delayed_delivery
+    }), 200
 
 @app.route('/')
 def home():
@@ -149,7 +212,6 @@ def predict():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
