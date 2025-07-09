@@ -66,5 +66,5 @@ if __name__ == "__main__":
         orders = get_recent_orders()
         for order in orders:
             check_and_deliver(order["id"])
-        print("Waiting for 5 minutes before next check...")
-        time.sleep(300)  # 5 minutes (300 seconds)
+        print("Waiting for 1 minute before next check...")
+        time.sleep(60)  # 1 minutes (60 seconds)
