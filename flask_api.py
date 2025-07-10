@@ -418,10 +418,18 @@ def predict():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+    
+# For Render
 
 if __name__ == '__main__':
-   # app.run(host='0.0.0.0', port=5000)
     with app.app_context():
         db.create_all()
-    print("Database initialized!")
+    app.run(host='0.0.0.0', port=5000)
+
+
+# if __name__ == '__main__':
+#    # app.run(host='0.0.0.0', port=5000)
+#     with app.app_context():
+#         db.create_all()
+#     print("Database initialized!")
 
