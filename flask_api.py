@@ -4,15 +4,54 @@ import pandas as pd
 import requests
 import smtplib
 from email.mime.text import MIMEText
+from flask_sqlalchemy import SQLAlchemy
+from flask import render_template, redirect, url_for
 import datetime
 import os
 
 app = Flask(__name__)
 
+# Configure the SQL Database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///manual_review.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+class ManualReview(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.String, unique=True, nullable=False)
+    admin_decision = db.Column(db.String)
+    notes = db.Column(db.String)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+
 # ==== Shopify Admin API Credentials ====
 SHOPIFY_API_KEY = "bf520678d939baaf977cf4fbc5a00ba1"
 SHOPIFY_PASSWORD = "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"
-SHOPIFY_STORE = "nerdused.myshopify.com"  # e.g. "mybrand.myshopify.com"
+SHOPIFY_STORE = "nerdused.myshopify.com"
+
+# Manual Review Dashboard
+
+@app.route('/manual_review')
+def manual_review_dashboard():
+    reviewed_orders = ManualReview.query.order_by(ManualReview.timestamp.desc()).all()
+    return render_template('manual_review.html', orders=reviewed_orders)
+
+@app.route('/manual_review/submit', methods=['POST'])
+def submit_manual_review():
+    order_id = request.form['order_id']
+    decision = request.form['decision']
+    notes = request.form.get('notes', '')
+    # Upsert: if order_id exists, update; else, insert new
+    review = ManualReview.query.filter_by(order_id=order_id).first()
+    if review:
+        review.admin_decision = decision
+        review.notes = notes
+        review.timestamp = datetime.datetime.utcnow()
+    else:
+        review = ManualReview(order_id=order_id, admin_decision=decision, notes=notes)
+        db.session.add(review)
+    db.session.commit()
+    return redirect(url_for('manual_review_dashboard'))  
 
 # ==== Email validation with Abstract API ====
 def validate_email_abstract(email):
@@ -381,4 +420,8 @@ def predict():
         return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+   # app.run(host='0.0.0.0', port=5000)
+    with app.app_context():
+        db.create_all()
+    print("Database initialized!")
+
