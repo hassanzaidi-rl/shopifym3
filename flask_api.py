@@ -116,6 +116,9 @@ def shopify_webhook():
     email_info = validate_email_abstract(email) if email else None
     ip_info = check_ip_reputation(ip) if ip else None
     
+    print(f"[AbstractAPI] Email: {email} | Result: {email_info}")
+    print(f"[IPQualityScore] IP: {ip} | Result: {ip_info}")
+
     # --- Build unified explanation_tags ---
     explanation_tags = []
 
