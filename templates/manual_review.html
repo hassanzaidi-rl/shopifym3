@@ -1,1 +1,37 @@
-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manual Review Dashboard</title>
+</head>
+<body>
+    <h2>Flagged Orders (Manual Review)</h2>
+    <table border="1">
+        <tr>
+            <th>Order ID</th>
+            <th>Decision</th>
+            <th>Notes</th>
+            <th>Timestamp</th>
+            <th>Tag/Action</th>
+        </tr>
+        {% for o in orders %}
+        <tr>
+            <form action="{{ url_for('submit_manual_review') }}" method="post">
+                <td>{{ o.order_id }}</td>
+                <td>
+                    <select name="decision">
+                        <option value="Fraud" {% if o.admin_decision=='Fraud' %}selected{% endif %}>Fraud</option>
+                        <option value="Safe" {% if o.admin_decision=='Safe' %}selected{% endif %}>Safe</option>
+                        <option value="Refunded" {% if o.admin_decision=='Refunded' %}selected{% endif %}>Refunded</option>
+                        <option value="Disputed" {% if o.admin_decision=='Disputed' %}selected{% endif %}>Disputed</option>
+                    </select>
+                </td>
+                <td><input type="text" name="notes" value="{{ o.notes or '' }}"></td>
+                <td>{{ o.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                <input type="hidden" name="order_id" value="{{ o.order_id }}">
+                <td><input type="submit" value="Save"></td>
+            </form>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
