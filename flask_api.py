@@ -108,6 +108,8 @@ def shopify_webhook():
     "email": order_data.get("email")
     }
     
+    input_df = pd.DataFrame([features_dict])[features]
+    
     email = order_data.get("email")
     ip = order_data.get("browser_ip") or order_data.get("client_details", {}).get("browser_ip")
 
@@ -159,7 +161,6 @@ def shopify_webhook():
     ])
 
     # --- Run prediction ---
-    input_df = pd.DataFrame([features_dict])[features]
     prediction = model.predict(input_df)[0]
     risk_label = label_encoder.inverse_transform([prediction])[0]
 
