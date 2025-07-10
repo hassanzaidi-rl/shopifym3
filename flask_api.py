@@ -170,16 +170,18 @@ def shopify_webhook():
 
     # IP reputation tags
     if ip_info:
-        if ip_info.get("fraud_score", 0) > 70:
+        fraud_score = ip_info.get("fraud_score")
+        if fraud_score is not None and fraud_score > 70:
             explanation_tags.append("high_risk_ip")
-        if ip_info.get("proxy"):
+        if ip_info.get("proxy") is True:
             explanation_tags.append("proxy_ip")
-        if ip_info.get("vpn"):
+        if ip_info.get("vpn") is True:
             explanation_tags.append("vpn_ip")
-        if ip_info.get("tor"):
+        if ip_info.get("tor") is True:
             explanation_tags.append("tor_ip")
-        if ip_info.get("recent_abuse"):
+        if ip_info.get("recent_abuse") is True:
             explanation_tags.append("recent_abuse_ip")
+
 
     if not explanation_tags:
         explanation_tags.append("none")
