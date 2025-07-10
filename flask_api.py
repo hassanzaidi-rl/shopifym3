@@ -5,6 +5,7 @@ import requests
 import smtplib
 from email.mime.text import MIMEText
 import datetime
+import os
 
 app = Flask(__name__)
 
@@ -12,6 +13,38 @@ app = Flask(__name__)
 SHOPIFY_API_KEY = "bf520678d939baaf977cf4fbc5a00ba1"
 SHOPIFY_PASSWORD = "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"
 SHOPIFY_STORE = "nerdused.myshopify.com"  # e.g. "mybrand.myshopify.com"
+
+# Email validation with Abstract API
+def validate_email_abstract(email):
+    api_key = os.environ.get("ABSTRACT_API_KEY", "50b5dd1a2bb34ca8822f30bed79a9076")
+    url = f"https://emailvalidation.abstractapi.com/v1/?api_key={api_key}&email={email}"
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        result = resp.json()
+        return {
+            "deliverability": result.get("deliverability"),
+            "is_valid_format": result.get("is_valid_format", {}).get("value"),
+            "is_free_email": result.get("is_free_email", {}).get("value"),
+            "is_disposable_email": result.get("is_disposable_email", {}).get("value"),
+        }
+    return None
+
+# IP reputation check with IPQualityScore
+def check_ip_reputation(ip):
+    api_key = os.environ.get("IPQS_API_KEY", "dZmNYUHVV7dv763OCdnmny5lkMCLJapo")
+    url = f"https://ipqualityscore.com/api/json/ip/{api_key}/{ip}"
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        result = resp.json()
+        return {
+            "fraud_score": result.get("fraud_score"),
+            "proxy": result.get("proxy"),
+            "vpn": result.get("vpn"),
+            "tor": result.get("tor"),
+            "recent_abuse": result.get("recent_abuse"),
+            "bot_status": result.get("bot_status"),
+        }
+    return None
 
 # ==== Load the trained model and metadata ====
 model_bundle = joblib.load('fraud_advanced_model.pkl')
@@ -74,27 +107,61 @@ def shopify_webhook():
     "order_id": order_data.get("id"),
     "email": order_data.get("email")
     }
+    
+    email = order_data.get("email")
+    ip = order_data.get("browser_ip") or order_data.get("client_details", {}).get("browser_ip")
+
+    email_info = validate_email_abstract(email) if email else None
+    ip_info = check_ip_reputation(ip) if ip else None
+    
+    # --- Build unified explanation_tags ---
+    explanation_tags = []
+
+    # Model-based risk explanations
+    if input_df['orders_last_7d'].iloc[0] > 2:
+        explanation_tags.append('repeat_orders_7d')
+    if input_df['refund_rate'].iloc[0] > 0.2:
+        explanation_tags.append('refund_history')
+    if input_df['payment_method_is_risky'].iloc[0] == 1:
+        explanation_tags.append('risky_payment_method')
+    if input_df['chargeback_rate'].iloc[0] > 0.05:
+        explanation_tags.append('chargeback_history')
+    if input_df['order_value_jump'].iloc[0] > input_df['order_value_std'].iloc[0]:
+        explanation_tags.append('order_value_jump')
+
+    # Email verification tags
+    if email_info:
+        if email_info.get("is_disposable_email"):
+            explanation_tags.append("disposable_email")
+        if email_info.get("deliverability") == "UNDELIVERABLE":
+            explanation_tags.append("undeliverable_email")
+
+    # IP reputation tags
+    if ip_info:
+        if ip_info.get("fraud_score", 0) > 70:
+            explanation_tags.append("high_risk_ip")
+        if ip_info.get("proxy"):
+            explanation_tags.append("proxy_ip")
+        if ip_info.get("vpn"):
+            explanation_tags.append("vpn_ip")
+        if ip_info.get("tor"):
+            explanation_tags.append("tor_ip")
+        if ip_info.get("recent_abuse"):
+            explanation_tags.append("recent_abuse_ip")
+
+    if not explanation_tags:
+        explanation_tags.append("none")
+
+    # --- Human-readable explanation string for Shopify/email/logs
+    explanation_str = ', '.join([
+        EXPLANATION_LABELS.get(code, code.replace('_', ' ').title())
+        for code in explanation_tags
+    ])
 
     # --- Run prediction ---
     input_df = pd.DataFrame([features_dict])[features]
     prediction = model.predict(input_df)[0]
     risk_label = label_encoder.inverse_transform([prediction])[0]
-
-    # --- Explanation logic ---
-    explanation = []
-    if input_df['orders_last_7d'].iloc[0] > 2:
-        explanation.append('repeat_orders_7d')
-    if input_df['refund_rate'].iloc[0] > 0.2:
-        explanation.append('refund_history')
-    if input_df['payment_method_is_risky'].iloc[0] == 1:
-        explanation.append('risky_payment_method')
-    if input_df['chargeback_rate'].iloc[0] > 0.05:
-        explanation.append('chargeback_history')
-    if input_df['order_value_jump'].iloc[0] > input_df['order_value_std'].iloc[0]:
-        explanation.append('order_value_jump')
-    if not explanation:
-        explanation.append('none')
-    explanation_str = ', '.join([EXPLANATION_LABELS.get(code, code) for code in explanation])
 
     # --- Tag and annotate the order in Shopify ---
     order_id = features_dict["order_id"]
@@ -189,52 +256,67 @@ def tag_order_in_shopify(order_id, fraud_label, explanation):
 def predict():
     input_data = request.json
     try:
-        input_df = pd.DataFrame([input_data])[features]
+        # Build features as usual
+        features_input = {f: input_data.get(f, 0) for f in features}
+        input_df = pd.DataFrame([features_input])[features]
         prediction = model.predict(input_df)[0]
         risk_label = label_encoder.inverse_transform([prediction])[0]
 
-        # --- Explanation tags as before ---
-        explanation = []
+        # --- Third-party checks (email & IP) ---
+        email = input_data.get("email")
+        ip = input_data.get("browser_ip") or input_data.get("client_details", {}).get("browser_ip")
+        email_info = validate_email_abstract(email) if email else None
+        ip_info = check_ip_reputation(ip) if ip else None
+
+        # --- Build unified explanation tags ---
+        explanation_tags = []
+        # Model explanations
         if input_df['orders_last_7d'].iloc[0] > 2:
-            explanation.append('repeat_orders_7d')
+            explanation_tags.append('repeat_orders_7d')
         if input_df['refund_rate'].iloc[0] > 0.2:
-            explanation.append('refund_history')
+            explanation_tags.append('refund_history')
         if input_df['payment_method_is_risky'].iloc[0] == 1:
-            explanation.append('risky_payment_method')
+            explanation_tags.append('risky_payment_method')
         if input_df['chargeback_rate'].iloc[0] > 0.05:
-            explanation.append('chargeback_history')
+            explanation_tags.append('chargeback_history')
         if input_df['order_value_jump'].iloc[0] > input_df['order_value_std'].iloc[0]:
-            explanation.append('order_value_jump')
-        if not explanation:
-            explanation.append('none')
-        explanation_str = ', '.join([EXPLANATION_LABELS.get(code, code) for code in explanation])
+            explanation_tags.append('order_value_jump')
+        # Email explanations
+        if email_info:
+            if email_info.get("is_disposable_email"):
+                explanation_tags.append("disposable_email")
+            if email_info.get("deliverability") == "UNDELIVERABLE":
+                explanation_tags.append("undeliverable_email")
+        # IP explanations
+        if ip_info:
+            if ip_info.get("fraud_score", 0) > 70:
+                explanation_tags.append("high_risk_ip")
+            if ip_info.get("proxy"):
+                explanation_tags.append("proxy_ip")
+            if ip_info.get("vpn"):
+                explanation_tags.append("vpn_ip")
+            if ip_info.get("tor"):
+                explanation_tags.append("tor_ip")
+            if ip_info.get("recent_abuse"):
+                explanation_tags.append("recent_abuse_ip")
+        if not explanation_tags:
+            explanation_tags.append("none")
+        # --- Human-readable explanation string ---
+        explanation_str = ', '.join([
+            EXPLANATION_LABELS.get(code, code.replace('_', ' ').title())
+            for code in explanation_tags
+        ])
 
-        # --- Shopify tagging ---
-        order_id = input_data.get("order_id")
-        shopify_status_code, shopify_response = None, None
-        if order_id:
-            shopify_status_code, shopify_response = tag_order_in_shopify(order_id, risk_label, explanation_str)
-
-        # --- Email confirmation for medium/high risk ---
-        customer_email = input_data.get("email")
-        email_sent = None
-        if risk_label.lower() in ["medium", "high"] and customer_email:
-            email_sent = send_confirmation_email(customer_email, order_id, risk_label, explanation_str)
-
-        # --- Delayed delivery flag ---
-        delayed_delivery = (risk_label.lower() in ["medium", "high"])
-
-        # --- Return everything for logging/demo ---
+        # --- Output all info (including email/IP checks for review/demo) ---
         return jsonify({
             'fraud_risk': risk_label,
             'explanation': explanation_str,
-            'shopify_status_code': shopify_status_code,
-            'shopify_response': shopify_response,
-            'email_sent': email_sent,
-            'delayed_delivery': delayed_delivery
+            'email_info': email_info,
+            'ip_info': ip_info
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
