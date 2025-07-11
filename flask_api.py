@@ -238,6 +238,19 @@ def shopify_webhook():
     prediction = model.predict(input_df)[0]
     risk_label = label_encoder.inverse_transform([prediction])[0]
 
+     # --- Auto-insert to manual review DB if risk is medium/high ---
+    if risk_label.lower() in ["medium", "high"]:
+        exists = ManualReview.query.filter_by(order_id=str(order_data.get("id"))).first()
+        if not exists:
+            new_review = ManualReview(
+                order_id = str(order_data.get("id")),
+                admin_decision = "Pending",
+                notes = f"Auto-flagged by fraud model: {risk_label.capitalize()} risk ({explanation_str})",
+                timestamp = datetime.datetime.utcnow()
+            )
+            db.session.add(new_review)
+            db.session.commit()
+
     # --- Tag and annotate the order in Shopify ---
     order_id = features_dict["order_id"]
     shopify_status_code, shopify_response = None, None
