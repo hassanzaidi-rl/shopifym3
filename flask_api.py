@@ -1,4 +1,3 @@
-from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
 import requests
@@ -6,6 +5,7 @@ import smtplib
 from email.mime.text import MIMEText
 from flask_sqlalchemy import SQLAlchemy
 from flask import render_template, redirect, url_for
+from flask import Flask, request, jsonify
 import datetime
 import os
 
@@ -23,6 +23,9 @@ class ManualReview(db.Model):
     notes = db.Column(db.String)
     timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
+# --- CREATE THE DB TABLE ON EVERY START ---
+with app.app_context():
+    db.create_all()
 
 # ==== Shopify Admin API Credentials ====
 SHOPIFY_API_KEY = "bf520678d939baaf977cf4fbc5a00ba1"
@@ -418,13 +421,13 @@ def predict():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-    
+
 # For Render
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(host='0.0.0.0', port=5000)
+# if __name__ == '__main__':
+#     with app.app_context():
+#         db.create_all()
+#     app.run(host='0.0.0.0', port=5000)
 
 
 # if __name__ == '__main__':
