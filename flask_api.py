@@ -54,7 +54,42 @@ def submit_manual_review():
         review = ManualReview(order_id=order_id, admin_decision=decision, notes=notes)
         db.session.add(review)
     db.session.commit()
-    return redirect(url_for('manual_review_dashboard'))  
+    update_shopify_manual_review(order_id, decision, notes)
+    return redirect(url_for('manual_review_dashboard'))
+
+def update_shopify_manual_review(order_id, decision, notes):
+
+    # Shopify API credentials
+    SHOPIFY_API_KEY = "bf520678d939baaf977cf4fbc5a00ba1"
+    SHOPIFY_PASSWORD = "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"
+    SHOPIFY_STORE = "nerdused.myshopify.com"
+
+    url = f"https://{SHOPIFY_API_KEY}:{SHOPIFY_PASSWORD}@{SHOPIFY_STORE}/admin/api/2025-04/orders/{order_id}.json"
+    # Get the existing order to preserve tags
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        print("Shopify order fetch failed:", resp.text)
+        return
+    order = resp.json().get("order", {})
+    tags = order.get("tags", "")
+
+    # Add admin decision to tags and notes
+    new_tags = tags + f", ManualReview-{decision}" if decision not in tags else tags
+    new_note = order.get("note", "")
+    if new_note:
+        new_note += f"\nManual Review: {decision}. Notes: {notes}"
+    else:
+        new_note = f"Manual Review: {decision}. Notes: {notes}"
+
+    payload = {
+        "order": {
+            "id": order_id,
+            "tags": new_tags,
+            "note": new_note
+        }
+    }
+    r = requests.put(url, json=payload)
+    print("Shopify update response:", r.status_code, r.text)
 
 # ==== Email validation with Abstract API ====
 def validate_email_abstract(email):
@@ -320,7 +355,7 @@ def send_confirmation_email(to_email, order_id, risk_label, explanation):
 def tag_order_in_shopify(order_id, fraud_label, explanation, email_log, ip_log):
     try:
         # 1. Get current tags
-        get_url = f"https://{SHOPIFY_API_KEY}:{SHOPIFY_PASSWORD}@{SHOPIFY_STORE}/admin/api/2023-10/orders/{order_id}.json"
+        get_url = f"https://{SHOPIFY_API_KEY}:{SHOPIFY_PASSWORD}@{SHOPIFY_STORE}/admin/api/2025-04/orders/{order_id}.json"
         response = requests.get(get_url)
         if response.status_code != 200:
             return response.status_code, {'error': f'Failed to fetch order: {response.text}'}
@@ -329,7 +364,7 @@ def tag_order_in_shopify(order_id, fraud_label, explanation, email_log, ip_log):
         updated_tags = (existing_tags + f",Fraud-{fraud_label}").strip(",") if existing_tags else f"Fraud-{fraud_label}"
 
         # 2. Update tags and note attributes
-        put_url = f"https://{SHOPIFY_STORE}/admin/api/2023-10/orders/{order_id}.json"
+        put_url = f"https://{SHOPIFY_STORE}/admin/api/2025-04/orders/{order_id}.json"
         headers = { "Content-Type": "application/json" }
         data = {
             "order": {
