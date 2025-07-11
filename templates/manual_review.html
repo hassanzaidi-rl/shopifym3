@@ -1,37 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Manual Review Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        h2 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #2c3e50;
+            color: #fff;
+            font-weight: normal;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        select, input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        input[type="submit"] {
+            background-color: #3498db;
+            color: white;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #2980b9;
+        }
+
+        @media (max-width: 768px) {
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+
+            tr {
+                margin-bottom: 15px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #fff;
+            }
+
+            td {
+                position: relative;
+                padding-left: 50%;
+            }
+
+            td::before {
+                position: absolute;
+                top: 14px;
+                left: 16px;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+                font-weight: bold;
+                color: #555;
+            }
+
+            td:nth-of-type(1)::before { content: "Order ID"; }
+            td:nth-of-type(2)::before { content: "Decision"; }
+            td:nth-of-type(3)::before { content: "Notes"; }
+            td:nth-of-type(4)::before { content: "Timestamp"; }
+            td:nth-of-type(5)::before { content: "Tag/Action"; }
+        }
+    </style>
 </head>
 <body>
     <h2>Flagged Orders (Manual Review)</h2>
-    <table border="1">
-        <tr>
-            <th>Order ID</th>
-            <th>Decision</th>
-            <th>Notes</th>
-            <th>Timestamp</th>
-            <th>Tag/Action</th>
-        </tr>
-        {% for o in orders %}
-        <tr>
-            <form action="{{ url_for('submit_manual_review') }}" method="post">
-                <td>{{ o.order_id }}</td>
-                <td>
-                    <select name="decision">
-                        <option value="Fraud" {% if o.admin_decision=='Fraud' %}selected{% endif %}>Fraud</option>
-                        <option value="Safe" {% if o.admin_decision=='Safe' %}selected{% endif %}>Safe</option>
-                        <option value="Refunded" {% if o.admin_decision=='Refunded' %}selected{% endif %}>Refunded</option>
-                        <option value="Disputed" {% if o.admin_decision=='Disputed' %}selected{% endif %}>Disputed</option>
-                    </select>
-                </td>
-                <td><input type="text" name="notes" value="{{ o.notes or '' }}"></td>
-                <td>{{ o.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                <input type="hidden" name="order_id" value="{{ o.order_id }}">
-                <td><input type="submit" value="Save"></td>
-            </form>
-        </tr>
-        {% endfor %}
+    <table>
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Decision</th>
+                <th>Notes</th>
+                <th>Timestamp</th>
+                <th>Tag/Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in orders %}
+            <tr>
+                <form action="{{ url_for('submit_manual_review') }}" method="post">
+                    <td>{{ o.order_id }}</td>
+                    <td>
+                        <select name="decision">
+                            <option value="Fraud" {% if o.admin_decision=='Fraud' %}selected{% endif %}>Fraud</option>
+                            <option value="Safe" {% if o.admin_decision=='Safe' %}selected{% endif %}>Safe</option>
+                            <option value="Refunded" {% if o.admin_decision=='Refunded' %}selected{% endif %}>Refunded</option>
+                            <option value="Disputed" {% if o.admin_decision=='Disputed' %}selected{% endif %}>Disputed</option>
+                        </select>
+                    </td>
+                    <td><input type="text" name="notes" value="{{ o.notes or '' }}"></td>
+                    <td>{{ o.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <input type="hidden" name="order_id" value="{{ o.order_id }}">
+                    <td><input type="submit" value="Save"></td>
+                </form>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
 </body>
 </html>
