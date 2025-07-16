@@ -8,6 +8,9 @@ from flask import render_template, redirect, url_for
 from flask import Flask, request, jsonify
 import datetime
 import os
+from math import ceil
+from flask import send_file
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -34,10 +37,23 @@ SHOPIFY_STORE = "nerdused.myshopify.com"
 
 # Manual Review Dashboard
 
+from math import ceil
+
 @app.route('/manual_review')
 def manual_review_dashboard():
-    reviewed_orders = ManualReview.query.order_by(ManualReview.timestamp.desc()).all()
-    return render_template('manual_review.html', orders=reviewed_orders)
+    page = int(request.args.get('page', 1))
+    per_page = 20
+
+    total_orders = ManualReview.query.count()
+    total_pages = ceil(total_orders / per_page)
+
+    reviewed_orders = ManualReview.query.order_by(ManualReview.timestamp.desc()) \
+        .offset((page - 1) * per_page).limit(per_page).all()
+
+    return render_template('manual_review.html',
+                           orders=reviewed_orders,
+                           page=page,
+                           total_pages=total_pages)
 
 @app.route('/manual_review/submit', methods=['POST'])
 def submit_manual_review():
@@ -56,6 +72,27 @@ def submit_manual_review():
     db.session.commit()
     update_shopify_manual_review(order_id, decision, notes)
     return redirect(url_for('manual_review_dashboard'))
+
+@app.route('/manual_review/export_excel')
+def export_manual_review_excel():
+    all_orders = ManualReview.query.order_by(ManualReview.timestamp.desc()).all()
+    data = [{
+        'Order ID': o.order_id,
+        'Decision': o.admin_decision,
+        'Notes': o.notes,
+        'Timestamp': o.timestamp.strftime('%Y-%m-%d %H:%M')
+    } for o in all_orders]
+
+    df = pd.DataFrame(data)
+
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    return send_file(output,
+                     download_name="manual_review_orders.xlsx",
+                     as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 def update_shopify_manual_review(order_id, decision, notes):
 
@@ -483,4 +520,3 @@ def predict():
 #     with app.app_context():
 #         db.create_all()
 #     print("Database initialized!")
-
