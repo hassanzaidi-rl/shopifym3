@@ -75,24 +75,33 @@ def submit_manual_review():
 
 @app.route('/manual_review/export_excel')
 def export_manual_review_excel():
-    all_orders = ManualReview.query.order_by(ManualReview.timestamp.desc()).all()
-    data = [{
-        'Order ID': o.order_id,
-        'Decision': o.admin_decision,
-        'Notes': o.notes,
-        'Timestamp': o.timestamp.strftime('%Y-%m-%d %H:%M')
-    } for o in all_orders]
+    try:
+        all_orders = ManualReview.query.order_by(ManualReview.timestamp.desc()).all()
+        print(f"[DEBUG] Loaded {len(all_orders)} orders for Excel export.")
 
-    df = pd.DataFrame(data)
+        data = [{
+            'Order ID': o.order_id,
+            'Decision': o.admin_decision,
+            'Notes': o.notes,
+            'Timestamp': o.timestamp.strftime('%Y-%m-%d %H:%M') if o.timestamp else ''
+        } for o in all_orders]
 
-    output = BytesIO()
-    df.to_excel(output, index=False)
-    output.seek(0)
+        df = pd.DataFrame(data)
 
-    return send_file(output,
-                     download_name="manual_review_orders.xlsx",
-                     as_attachment=True,
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
+
+        print("[DEBUG] Excel file created successfully.")
+        return send_file(output,
+                         download_name="manual_review_orders.xlsx",
+                         as_attachment=True,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    except Exception as e:
+        print("[ERROR] Excel export failed:", str(e))
+        return "Internal Server Error: " + str(e), 500
+
 
 def update_shopify_manual_review(order_id, decision, notes):
 
