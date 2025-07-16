@@ -104,9 +104,22 @@
 </head>
 <body>
     <h2>Flagged Orders (Manual Review)</h2>
-    <div style="text-align: right; margin-bottom: 10px;">
-        <a href="{{ url_for('export_manual_review_excel') }}">
-            <input type="button" value="Export to Excel">
+    <div style="text-align: right; margin-bottom: 20px;">
+        <a href="{{ url_for('export_manual_review_excel') }}" style="
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 18px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: inline-block;
+        "
+        onmouseover="this.style.backgroundColor='#219150'"
+        onmouseout="this.style.backgroundColor='#27ae60'">
+            📤 Export to Excel
         </a>
     </div>
     <table>
